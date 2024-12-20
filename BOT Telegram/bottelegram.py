@@ -1,11 +1,47 @@
 import telebot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
+import requests
+from PIL import Image, ImageDraw, ImageFont
+import os
 
 # Token de conexão do bot (substitua pelo seu)
 CHAVE_API = "8104013049:AAGN2vM_lzko5M62drNHAVeoSn0__V1hcwY"
 
 # Instancia o bot
 bot = telebot.TeleBot(CHAVE_API)
+
+# Função para criar o menu com imagem de fundo
+def criar_imagem_menu(texto):
+    # URL da imagem de fundo
+    url_imagem = 'https://i.pinimg.com/736x/63/03/d9/6303d9cebd756db03250ed597a690d59.jpg'
+
+    # Baixando a imagem
+    response = requests.get(url_imagem)
+    if response.status_code == 200:
+        with open('imagem_fundo.jpg', 'wb') as f:
+            f.write(response.content)
+
+    # Carrega a imagem de fundo
+    fundo = Image.open('imagem_fundo.jpg')
+    fundo = fundo.resize((800, 600))  # Ajuste o tamanho conforme necessário
+
+    # Cria um objeto ImageDraw
+    draw = ImageDraw.Draw(fundo)
+
+    # Define a fonte e o tamanho do texto
+    try:
+        fonte = ImageFont.truetype('arialbd.ttf', 40)  # Fonte bold; substitua pelo caminho correto se necessário
+    except IOError:
+        fonte = ImageFont.load_default()
+
+    # Define a cor do texto (preto)
+    cor_texto = (0, 0, 0)  # Preto
+
+    # Adiciona texto à imagem
+    draw.text((50, 50), texto, font=fonte, fill=cor_texto)
+
+    # Salva a nova imagem
+    fundo.save('menu_criado.jpg')
 
 # Função para criar o menu principal
 def criar_menu():
@@ -16,6 +52,7 @@ def criar_menu():
         InlineKeyboardButton("3️⃣ Horários das Aulas", callback_data="horarios"),
         InlineKeyboardButton("4️⃣ Benefícios do Jiu-Jitsu", callback_data="beneficios"),
         InlineKeyboardButton("5️⃣ Fale Conosco", callback_data="fale_conosco"),
+        InlineKeyboardButton("🔙 Voltar ao Menu Principal", callback_data="menu_principal")
     ]
     menu.add(*botoes)
     return menu
@@ -23,21 +60,19 @@ def criar_menu():
 # Envia o menu inicial
 @bot.message_handler(commands=["start", "menu"])
 def enviar_menu(mensagem):
-    texto = (
-        "👋 *Bem-vindo à Gracie Barra!*\n\n"
-        "📋 Escolha uma das opções abaixo para saber mais:"
-    )
-    bot.send_message(mensagem.chat.id, texto, parse_mode="Markdown", reply_markup=criar_menu())
+    # Cria a imagem com o texto do menu
+    texto_menu = "👋 Bem-vindo à Gracie Barra!\nEscolha uma das opções abaixo:"
+    criar_imagem_menu(texto_menu)
 
-# Função para enviar respostas sem imagens
+    # Envia a imagem criada
+    with open('menu_criado.jpg', 'rb') as imagem:
+        bot.send_photo(mensagem.chat.id, imagem, caption="Escolha uma opção:", parse_mode="Markdown", reply_markup=criar_menu())
+
+# Função para enviar a resposta baseada na opção escolhida
 def enviar_resposta(chat_id, titulo, descricao):
-    bot.send_message(
-        chat_id,
-        f"📌 *{titulo}*\n\n{descricao}",
-        parse_mode="Markdown",
-    )
+    bot.send_message(chat_id, f"✨ *{titulo}* ✨\n\n{descricao}", parse_mode="Markdown", reply_markup=criar_menu())
 
-# Callback para lidar com os botões interativos
+# Manipulador de callback para o menu
 @bot.callback_query_handler(func=lambda call: True)
 def callback_menu(call):
     respostas = {
@@ -90,15 +125,16 @@ def callback_menu(call):
                 "📞 Estamos aqui para ajudar você!"
             ),
         },
+        "menu_principal": {
+            "titulo": "Menu Principal",
+            "descricao": "👋 Bem-vindo de volta ao Menu Principal!\nEscolha uma das opções abaixo:"
+        },
     }
 
     resposta = respostas.get(call.data)
     if resposta:
-        enviar_resposta(
-            call.message.chat.id,
-            resposta["titulo"],
-            resposta["descricao"],
-        )
+        # Envia a nova resposta
+        enviar_resposta(call.message.chat.id, resposta["titulo"], resposta["descricao"])
     else:
         bot.send_message(call.message.chat.id, "Opção inválida. Por favor, escolha novamente.")
 
